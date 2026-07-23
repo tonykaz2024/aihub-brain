@@ -18,3 +18,6 @@ RUN mkdir -p /app/memory /app/logs
 
 ENV PYTHONUNBUFFERED=1
 CMD ["python", "-m", "agents.orchestrator"]
+
+# Schema SQL baked in imagine (nu depinde de mount)
+COPY memory/schema.sql /app/memory/schema.sql
