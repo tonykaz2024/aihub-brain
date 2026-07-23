@@ -1,0 +1,16 @@
+services:
+  aihub-webhook:
+    build: .
+    image: aihub-brain:latest
+    container_name: aihub-webhook
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_ADMIN_CHAT_ID=${TELEGRAM_ADMIN_CHAT_ID:-467375706}
+    ports:
+      - "4041:4041"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: ["python", "-m", "agents.webhook_receiver"]
+    mem_limit: 256m

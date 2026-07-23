@@ -292,3 +292,79 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+
+
+# ── WEBHOOK RECEIVER — Plane bug nou → Multica ──────────────────────────────
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+
+WEBHOOK_PORT = 4041
+FREDDY_AGENT_ID = "ab33caa7-52f3-4c2b-bda1-5d521327273e"
+MULTICA_WS = "62fb6cd8-c8b9-4305-9692-cf7290d523bf"
+MULTICA_USER = "f1d82b09-3912-4ff3-b22e-6116a4a9f926"
+
+class WebhookHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+        try:
+            payload = json.loads(body)
+            logger.info("[WEBHOOK] Plane event primit: %s", payload.get('event', 'unknown'))
+
+            # Extrage datele bug-ului din payload Plane
+            event = payload.get('event', '')
+            data = payload.get('data', {})
+
+            if event in ('issue.created', 'issues.created') and data:
+                title = data.get('name', data.get('title', 'Bug nou'))
+                desc = data.get('description_html', data.get('description', ''))
+                priority = data.get('priority', 'none')
+
+                # Creeaza issue in Multica
+                _create_multica_issue(title, desc, priority)
+                logger.info("[WEBHOOK] Bug nou importat: %s", title[:80])
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok"}')
+        except Exception as e:
+            logger.error("[WEBHOOK] Eroare procesare: %s", e)
+            self.send_response(500)
+            self.end_headers()
+
+    def log_message(self, *args):
+        pass
+
+def _create_multica_issue(title, description, priority):
+    """Creeaza issue in Multica DB si il asigneaza lui Freddy."""
+    import psycopg2
+    pri_map = {"urgent":"urgent","high":"high","medium":"medium","none":"none","low":"low"}
+    pri = pri_map.get(priority, "none")
+    try:
+        conn = psycopg2.connect(
+            host="192.168.224.2", port=5432,
+            dbname="multica", user="multica", password="multica_habibula_2026"
+        )
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO issue (workspace_id, title, description, status, priority, creator_type, creator_id, assignee_type, assignee_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+            (MULTICA_WS, title, description, "backlog", pri, "member", MULTICA_USER, "agent", FREDDY_AGENT_ID)
+        )
+        issue_id = cur.fetchone()[0]
+        conn.commit()
+        conn.close()
+        logger.info("[WEBHOOK] Issue creat in Multica: %s, asignat Freddy", issue_id)
+        # Notifica pe Telegram
+        send_telegram(
+            os.environ.get("TELEGRAM_BOT_TOKEN", ""),
+            os.environ.get("TELEGRAM_ADMIN_CHAT_ID", ""),
+            f"🐞 Bug nou in Multica (asignat Freddy)\n*{title}*\nPrioritate: {pri}"
+        )
+    except Exception as e:
+        logger.error("[WEBHOOK] Multica insert failed: %s", e)
+
+def start_webhook_server():
+    server = HTTPServer(("0.0.0.0", WEBHOOK_PORT), WebhookHandler)
+    logger.info("Webhook receiver pe port %d", WEBHOOK_PORT)
+    server.serve_forever()
