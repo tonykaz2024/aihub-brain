@@ -1,0 +1,22 @@
+services:
+  aihub-brain:
+    build: .
+    image: aihub-brain:latest
+    container_name: aihub-brain
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_ADMIN_CHAT_ID=${TELEGRAM_ADMIN_CHAT_ID}
+    volumes:
+      # Acces la Docker socket — poate inspecta/restarta containere
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Memoria incidentelor — persistentă
+      - ./memory:/app/memory
+      # Logs
+      - ./logs:/app/logs
+      # Config editabil fără rebuild
+      - ./config:/app/config:ro
+    network_mode: host
+    # Nu are nevoie de mai mult de 512MB
+    mem_limit: 512m

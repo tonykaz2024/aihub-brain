@@ -1,0 +1,70 @@
+# aihub-brain — configurație centrală
+# Schimbă doar aici, nu în cod
+
+telegram:
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  admin_chat_id: "${TELEGRAM_ADMIN_CHAT_ID}"
+
+# SSH la host Docker (sau socket mount)
+docker:
+  socket: "/var/run/docker.sock"
+
+# Servicii monitorizate — P0 = alertă imediată, P1 = alertă după 3 eșecuri
+services:
+  - name: omniroute
+    container: omniroute
+    port: 20128
+    health_url: "http://192.168.10.50:20128/health"
+    priority: P0
+    specialist: agents.omniroute_watcher
+    restart_allowed: true
+
+  - name: hermes-gateway
+    container: hermes-gateway
+    priority: P0
+    specialist: agents.hermes_watcher
+    restart_allowed: true
+
+  - name: agent-zero
+    container: agent-zero
+    port: 50001
+    health_url: "http://192.168.10.50:50001/"
+    priority: P0
+    specialist: agents.a0_watcher
+    restart_allowed: false  # nu restartăm A0 autonom — poate pierde stare
+
+  - name: openwebui
+    container: openwebui
+    port: 3000
+    health_url: "http://192.168.10.50:3000/"
+    priority: P0
+    specialist: agents.general_watcher
+    restart_allowed: true
+
+  - name: whisper
+    container: whisper
+    port: 8082
+    health_url: "http://192.168.10.50:8082/v1/models"
+    priority: P0
+    specialist: agents.general_watcher
+    restart_allowed: true
+
+  - name: deer-flow-gateway
+    container: deer-flow-gateway
+    priority: P1
+    specialist: agents.general_watcher
+    restart_allowed: true
+
+  - name: plane-app-api-1
+    container: plane-app-api-1
+    port: 8001
+    priority: P1
+    specialist: agents.general_watcher
+    restart_allowed: true
+
+# Praguri
+thresholds:
+  restart_loop_count: 3       # câte restarturi în 5 min = incident
+  error_rate_per_min: 10      # erori/minut = incident
+  check_interval_sec: 30      # cât de des verificăm
+  memory_limit_pct: 90        # % RAM = alertă
